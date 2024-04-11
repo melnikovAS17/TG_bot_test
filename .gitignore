@@ -4,6 +4,10 @@ target/
 !**/src/test/**/target/
 application.properties
 dispatcher.log
+/logs
+.idea/encodings.xml
+.idea
+.gitignore
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml

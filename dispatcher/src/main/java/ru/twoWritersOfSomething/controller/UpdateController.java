@@ -6,8 +6,9 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import ru.twoWritersOfSomething.controller.configs.TelegramBotInteraction;
 import ru.twoWritersOfSomething.services.UpdateProducer;
+import ru.twoWritersOfSomething.services.callbackHandl.CallBackHandler;
+import ru.twoWritersOfSomething.services.messageBuilders.AnswerMessageGenerator;
 import ru.twoWritersOfSomething.utils.MessageUtils;
 
 import static ru.twoWriterOfSomething.model.RabbitQueue.*;
@@ -23,10 +24,16 @@ public class UpdateController {
 
     private final UpdateProducer updateProducer;
 
+    private final AnswerMessageGenerator answerMessageGenerator;
+
+    private final CallBackHandler callBackHandler;
+
     @Autowired
-    public UpdateController(MessageUtils messageUtils, UpdateProducer updateProducer) {
+    public UpdateController(MessageUtils messageUtils, UpdateProducer updateProducer, AnswerMessageGenerator answerMessageGenerator, CallBackHandler callBackHandler) {
         this.messageUtils = messageUtils;
         this.updateProducer = updateProducer;
+        this.answerMessageGenerator = answerMessageGenerator;
+        this.callBackHandler = callBackHandler;
     }
 
     // Автор создал подобную связь (не через автовайринг бина), чтобы избежать цикличексой зависимости
@@ -41,8 +48,12 @@ public class UpdateController {
             logger.error("Received update is null!");
             return;
         }
+        if (update.hasCallbackQuery()) {
+            processCallBackMessage(update);
+            return;
+        }
 
-        if (update != null){
+        if (update.hasMessage()){
             distributeMessageByType(update);
         }else {
             logger.error("Received unsupported message type!");
@@ -51,13 +62,13 @@ public class UpdateController {
 
     private void distributeMessageByType(Update update) {
         Message message = update.getMessage();
-        if (message.getText() != null) {
+        if (message.hasText()) {
             processTextMessage(update);
-        } else if (message.getDocument() != null) {
+        } else if (message.hasDocument()) {
             processDocMessage(update);
-        } else if (message.getPhoto() != null) {
+        } else if (message.hasPhoto()) {
             processPhotoMessage(update);
-        } else {
+    } else {
             setUnsupportedMessageTypeView(update);
         }
     }
@@ -68,7 +79,8 @@ public class UpdateController {
         setView(sendMessage);
     }
 
-    private void setView(SendMessage sendMessage) {
+    public void setView(SendMessage sendMessage) {
+        logger.debug(sendMessage.getText() + " : бот -> отправил в чат юзеру");
         telegramBotInteraction.sendResponseMessageForUser(sendMessage);
     }
 
@@ -89,6 +101,12 @@ public class UpdateController {
     }
 
     private void processTextMessage(Update update) {
-        updateProducer.produce(TEXT_MESSAGE_UPDATE ,update);
+        //TODO updateProducer.produce(TEXT_MESSAGE_UPDATE, update);
+        logger.debug(update.getMessage().getText());
+        setView(answerMessageGenerator.getAnswer(update));
+    }
+
+    private void processCallBackMessage(Update update) {
+        setView(callBackHandler.callBackMessageHandler(update));
     }
 }
